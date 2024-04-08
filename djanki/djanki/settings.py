@@ -26,22 +26,26 @@ SECRET_KEY = 'django-insecure-lxoep&-al%b5z7a*u5f4d&f+t9!50iscw73o+k+e^tk43nf2ua
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
+AUTH_USER_MODEL = 'login.User'
 
 # Application definition
 
 INSTALLED_APPS = [
+    'login',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'quizbank',
-    'login',
+    'corsheaders',
+    'drf_spectacular'
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -50,7 +54,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
-
+CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = 'djanki.urls'
 
 TEMPLATES = [
@@ -78,13 +82,14 @@ WSGI_APPLICATION = 'djanki.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'djanki',
-        'USERNAME': 'chenh',
-        'PASSWORD': 'c18731160609',
-        'HOST': 'www.iesast.com',
-        'PORT': '5432'
+        'NAME': 'study_sys',  # 你的数据库名字
+        'USER': 'postgres',  # 你的PostgreSQL用户名
+        'PASSWORD': 'Qq123123',  # 你的PostgreSQL密码
+        'HOST': '10.115.59.213',  # 你的数据库主机，本地通常是localhost
+        'PORT': '5432',  # 你的PostgreSQL端口，5432是默认端口
     }
 }
+
 
 
 # Password validation
@@ -105,6 +110,35 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=300),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',  # 你的用户模型中定义的用户ID字段名
+    'USER_ID_CLAIM': 'id',  # token中使用的claim名称
+}
+
+# drf-spectacular 配置 
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'DjanKi——刷题系统',
+    'DESCRIPTION': '基于SM-2的自适应刷题系统,前端VUE3,后端Django',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
