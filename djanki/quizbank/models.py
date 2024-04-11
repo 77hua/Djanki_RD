@@ -1,6 +1,7 @@
 from django.db import models
 
 
+# 题目类型
 class QuestionType(models.Model):
     TYPE_CHOICES = [
         ("SC", "单选题"),
@@ -18,7 +19,7 @@ class QuestionType(models.Model):
     def __str__(self):
         return self.description
 
-
+# 课程
 class Course(models.Model):
     name = models.CharField(max_length=256)
     description = models.TextField(blank=True)
@@ -26,26 +27,26 @@ class Course(models.Model):
     def __str__(self):
         return self.name
 
-
+# 知识点
 class Category(models.Model):
     course = models.ForeignKey(
-        Course, on_delete=models.CASCADE, related_name="categories"
+        Course, on_delete=models.CASCADE, related_name="categories" # 所属课程
     )
-    name = models.CharField(max_length=256)
-    parent = models.ForeignKey(
+    name = models.CharField(max_length=256) # 知识点名称
+    parent = models.ForeignKey( # 父级知识点，允许为空，表示顶级分类
         "self", on_delete=models.CASCADE, null=True, blank=True, related_name="children"
     )
-    is_knowledge_point = models.BooleanField(default=False)
+    is_knowledge_point = models.BooleanField(default=False) # 是否为知识点
     order = models.FloatField(default=0.0, help_text="用于设置显示顺序")
 
     class Meta:
-        unique_together = ("parent", "name")
+        unique_together = ("parent", "name") # 设置parent和name的组合唯一，保证同一父分类下没有重名的子分类
         ordering = ["order"]
 
     def __str__(self):
         return self.name
 
-
+# 支撑目标
 class SupportObjective(models.Model):
     course = models.ForeignKey(
         Course, on_delete=models.CASCADE, related_name="support_objectives"
@@ -60,7 +61,7 @@ class SupportObjective(models.Model):
     def __str__(self):
         return self.name
 
-
+# 问题
 class Question(models.Model):
     # 题目类型
     question_type = models.ForeignKey(QuestionType, on_delete=models.CASCADE)

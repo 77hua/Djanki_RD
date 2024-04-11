@@ -2,14 +2,17 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status,serializers
-from .serializers import CourseSerializer
-from .models import Course  # 确保从你的模型中正确导入Course模型
+from .serializers import CourseSerializer,CategorySerializer
+from .models import Course,Category  # 确保从你的模型中正确导入Course模型
 from drf_spectacular.utils import extend_schema,inline_serializer,OpenApiResponse
+from django.db.models import F
 
-# 课程列表
-class CourseListView(APIView):
-    permission_classes = [IsAuthenticated]  # 可选，根据你的权限需求决定是否需要
+# 课程列表、添加
+class CourseView(APIView):
+    permission_classes = [IsAuthenticated]
+
     @extend_schema(
+        methods=['GET'],
         tags=['课程管理'],
         summary='获取所有课程',
         description='返回数据库中所有课程的列表。',
@@ -20,23 +23,21 @@ class CourseListView(APIView):
         serializer = CourseSerializer(courses, many=True)
         return Response(serializer.data)
 
-# 课程创建
-class CourseCreateView(APIView):
-    permission_classes = [IsAuthenticated]
     @extend_schema(
+        methods=['POST'],
         tags=['课程管理'],
         summary='创建课程',
         description='用户可以通过提供课程名和课程简介来创建新的课程。如果课程名和课程简介相同，则会返回错误。',
-        request=CourseSerializer,  # 如果你的CourseSerializer已经定义了请求的结构，可以直接使用
+        request=CourseSerializer,
         responses={
             201: inline_serializer(
                 name='CourseCreateSuccessResponse',
                 fields={
                     'message': serializers.CharField(),
-                    'course': CourseSerializer(),  # 假设你希望返回创建的课程的详细信息
+                    'course': CourseSerializer(),
                 }
             ),
-            400: OpenApiResponse(description='已存在具有相同课程名和课程简介的课程或其他验证错误'),
+            400: OpenApiResponse(description='验证错误'),
         },
     )
     def post(self, request):
@@ -44,45 +45,156 @@ class CourseCreateView(APIView):
         if serializer.is_valid():
             name = serializer.validated_data['name']
             description = serializer.validated_data['description']
-            
-            # 检查数据库中是否已存在具有相同名称和简介的课程
             if Course.objects.filter(name=name, description=description).exists():
-                return Response(
-                    {"error": "已存在具有相同课程名和课程简介的课程"},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # 不存在相同名称和简介的课程，保存新课程
+                return Response({"error": "已存在具有相同课程名和课程简介的课程"}, status=status.HTTP_400_BAD_REQUEST)
             serializer.save()
-            return Response(
-                {"message": "课程创建成功", "course": serializer.data},
-                status=status.HTTP_201_CREATED
-            )
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-# 课程删除
-class CourseDeleteView(APIView):
+            return Response({"message": "课程创建成功", "course": serializer.data}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+# 删除、修改课程
+class CourseDetailView(APIView):
     permission_classes = [IsAuthenticated]
-
     @extend_schema(
+        methods=['DELETE'],
         tags=['课程管理'],
         summary='删除课程',
         description='通过课程ID删除指定的课程。',
         responses={
             204: OpenApiResponse(description='课程删除成功'),
             404: OpenApiResponse(description='课程未找到'),
-            403: OpenApiResponse(description='无权限执行此操作')
         }
     )
-    def delete(self, request, pk):
+    def delete(self, request, pk=None):
+        if not pk:
+            return Response({'error': '缺少课程ID'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             course = Course.objects.get(pk=pk)
             course.delete()
-            return Response({'message': '课程删除成功'},status=status.HTTP_204_NO_CONTENT)
+            return Response({'message': '课程删除成功'}, status=status.HTTP_204_NO_CONTENT)
         except Course.DoesNotExist:
             return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            # 可以根据需要处理其他异常
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    @extend_schema(
+        methods=['PATCH'],
+        tags=['课程管理'],
+        summary='修改课程',
+        description='通过课程ID部分更新指定的课程信息。',
+        request=CourseSerializer,
+        responses={
+            200: CourseSerializer(),
+            404: OpenApiResponse(description='课程未找到'),
+        },
+    )
+    def patch(self, request, pk=None):
+        try:
+            course = Course.objects.get(pk=pk)
+            serializer = CourseSerializer(course, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        except Course.DoesNotExist:
+            return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
 
+# 知识点
+class CourseCategoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    # 根据课程id获取知识点
+    @extend_schema(
+        tags=['知识点'],
+        summary="获取课程的所有知识点",
+        responses={200: CategorySerializer(many=True)},
+        description="返回指定课程下所有知识点的列表。"
+    )
+    def get(self, request, course_id):
+        # 确保课程存在
+        try:
+            course = Course.objects.get(id=course_id)
+        except Course.DoesNotExist:
+            return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
+
+        # 获取该课程下所有顶层知识点或分类（没有父知识点的知识点）
+        categories = Category.objects.filter(course=course, parent__isnull=True)
+        serializer = CategorySerializer(categories, many=True)
+        return Response(serializer.data)
+
+    # 添加知识点
+    @extend_schema(
+        tags=['知识点'],
+        summary="添加新的知识点到课程",
+        request=CategorySerializer,
+        responses={201: CategorySerializer},
+        description="在指定课程下添加新的知识点。"
+    )
+    def post(self, request, course_id):
+        try:
+            course = Course.objects.get(id=course_id)
+        except Course.DoesNotExist:
+            return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # 在这里，我们确保即使`parent`字段没有被提供，也不会导致错误。
+        request_data = request.data.copy()
+        if 'parent_id' not in request_data or not request_data['parent_id']:
+            request_data['parent'] = None
+        else:
+            # 如果提供了`parent_id`，尝试将其转换为`parent`对象
+            try:
+                parent_category = Category.objects.get(id=request_data['parent_id'], course=course)
+                request_data['parent'] = parent_category.id
+            except Category.DoesNotExist:
+                return Response({'error': '父知识点未找到'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = CategorySerializer(data=request_data)
+        if serializer.is_valid():
+            serializer.save(course=course)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+class CourseCategoryDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+    # 删除知识点
+    @extend_schema(
+        tags=['知识点'],
+        summary="删除指定的知识点",
+        responses={204: None},
+        description="从课程中删除指定ID的知识点。"
+    )
+    def delete(self, request, course_id, category_id):
+        try:
+            category = Category.objects.get(course_id=course_id, id=category_id)
+        except Category.DoesNotExist:
+            return Response({'error': '知识点未找到'}, status=status.HTTP_404_NOT_FOUND)
+        
+        parent_id = category.parent_id  # 获取被删除知识点的父知识点ID
+        category_order = category.order  # 获取被删除知识点的顺序
+        category.delete()  # 删除知识点
+
+        # 重新排序：对同一父级下，顺序在被删除知识点之后的所有知识点，其order值递减1
+        if category.parent_id is None:
+        # 对同一课程下的顶层知识点重新排序
+            Category.objects.filter(course_id=course_id, parent__isnull=True, order__gt=category_order).update(order=F('order') - 1)
+        else:
+            # 对同一父级下，顺序在被删除知识点之后的所有知识点，其order值递减1
+            Category.objects.filter(parent_id=category.parent_id, order__gt=category_order).update(order=F('order') - 1)
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    # 修改知识点
+    @extend_schema(
+        tags=['知识点'],
+        summary="修改指定的知识点",
+        request=CategorySerializer,
+        responses={200: CategorySerializer},
+        description="更新指定ID的知识点的详细信息。",
+        methods=['PUT']
+    )
+    def put(self, request, course_id, category_id):
+        try:
+            category = Category.objects.get(course_id=course_id, id=category_id)
+        except Category.DoesNotExist:
+            return Response({'error': '知识点未找到'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = CategorySerializer(category, data=request.data, partial=True) # 注意这里的 partial=True 参数
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

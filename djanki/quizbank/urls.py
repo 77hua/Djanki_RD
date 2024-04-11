@@ -1,8 +1,9 @@
 from django.urls import path
-from .views import CourseCreateView,CourseListView,CourseDeleteView
+from .views import CourseView,CourseDetailView,CourseCategoryView,CourseCategoryDetailView
 
 urlpatterns = [
-    path('courses/', CourseListView.as_view(), name='course-list'), # 获取课程list
-    path('course-create/', CourseCreateView.as_view(), name='course-create'), # 创建课程
-    path('courses-delete/<int:pk>/', CourseDeleteView.as_view(), name='course-delete'), # 删除课程
+    path('courses/', CourseView.as_view(), name='course-list-create'),# 获取、添加课程学习
+    path('courses/<int:pk>/', CourseDetailView.as_view(), name='course-delete'),  # 删除、修改课程信息
+    path('courses/<int:course_id>/category/', CourseCategoryView.as_view(), name='add-category'), # 获取、添加知识点
+    path('courses/<int:course_id>/category/<int:category_id>/', CourseCategoryDetailView.as_view(), name='course-category-detail'),# 删除、修改知识点
 ]

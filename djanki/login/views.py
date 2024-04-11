@@ -12,7 +12,7 @@ from django.contrib.auth import authenticate
 # 登录
 class LoginView(APIView):
     @extend_schema( # 接口装饰器
-        tags=['登录、注册'],
+        tags=['登录'],
         summary='用户登录',
         description='用户通过用户名和密码登录，成功返回JWT。',
         request=inline_serializer(
@@ -57,7 +57,7 @@ class LoginView(APIView):
 # 注册
 class RegisterView(APIView):
     @extend_schema(
-        tags=['登录、注册'],
+        tags=['注册'],
         summary='用户注册',
         description='用户提供用户名、密码和角色来注册新账号。',
         request=inline_serializer(
