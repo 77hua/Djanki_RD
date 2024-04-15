@@ -41,7 +41,8 @@ INSTALLED_APPS = [
     'rest_framework',
     'quizbank',
     'corsheaders',
-    'drf_spectacular'
+    'drf_spectacular',
+    'users'
 ]
 
 MIDDLEWARE = [

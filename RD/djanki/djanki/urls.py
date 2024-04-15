@@ -22,6 +22,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/users/', include('login.urls')), # 登录、注册
     path('api/teach_admin/', include('quizbank.urls')), # 课程CRUD
+    path('api/learn/', include('users.urls')), # 学习情况
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'), # openapi
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'), # swagger UI
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),

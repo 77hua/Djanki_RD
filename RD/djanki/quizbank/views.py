@@ -2,10 +2,10 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status,serializers
-from .serializers import CourseSerializer,CategorySerializer
-from .models import Course,Category  # 确保从你的模型中正确导入Course模型
+from .serializers import CourseSerializer,CategorySerializer,QuestionSerializer,SupportObjectiveSerializer
+from .models import Course,Category,Question,SupportObjective 
 from drf_spectacular.utils import extend_schema,inline_serializer,OpenApiResponse
-from django.db.models import F
+from django.db.models import F,Max
 
 # 课程列表、添加
 class CourseView(APIView):
@@ -198,3 +198,96 @@ class CourseCategoryDetailView(APIView):
             return Response(serializer.data)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# 试题创建
+class QuestionCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        tags=['试题'],
+        summary="根据课程ID获取试题",
+        responses={200: QuestionSerializer(many=True)},
+        description="返回指定课程中所有试题的列表。",
+        parameters=[{
+            'name': 'course_id',
+            'description': '课程的ID'
+        }]
+    )
+    def get(self, request, course_id):
+        try:
+            course = Course.objects.get(pk=course_id)
+        except Course.DoesNotExist:
+            return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
+        
+        questions = Question.objects.filter(course=course)
+        serializer = QuestionSerializer(questions, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        tags=['试题'],
+        summary="为指定课程添加新试题",
+        request=QuestionSerializer,
+        responses={201: QuestionSerializer},
+        description="为指定课程创建并返回一个新的试题。",
+        parameters=[{
+            'name': 'course_id',
+            'description': '课程的ID',
+            'required': True,
+            'type': 'integer',
+            'in': 'path'
+        }]
+    )
+    def post(self, request, course_id):
+        try:
+            course = Course.objects.get(pk=course_id)
+        except Course.DoesNotExist:
+            return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = QuestionSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            # 将course实例添加到validated_data中
+            serializer.save(course=course)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+# 课程支撑
+class CourseSupportObjectivesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="获取课程的所有支撑目标",
+        responses={200: SupportObjectiveSerializer(many=True)},
+        description="根据课程ID返回该课程的所有支撑目标列表。"
+    )
+    def get(self, request, course_id):
+        try:
+            course = Course.objects.get(pk=course_id)
+        except Course.DoesNotExist:
+            return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
+
+        support_objectives = SupportObjective.objects.filter(course=course).order_by('order')
+        serializer = SupportObjectiveSerializer(support_objectives, many=True)
+        return Response(serializer.data)
+
+    @extend_schema(
+        summary="为特定课程添加新的支撑目标",
+        request=SupportObjectiveSerializer,
+        responses={201: SupportObjectiveSerializer},
+        description="为指定的课程添加一个新的支撑目标，并返回创建的支撑目标。"
+    )
+    def post(self, request, course_id):
+        try:
+            course = Course.objects.get(pk=course_id)
+        except Course.DoesNotExist:
+            return Response({'error': '课程未找到'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = request.data.copy()
+        if 'order' not in data or data['order'] is None:
+            last_order = SupportObjective.objects.filter(course=course).aggregate(Max('order'))['order__max']
+            data['order'] = (last_order or 0) + 1
+
+        serializer = SupportObjectiveSerializer(data=data)
+        if serializer.is_valid():
+            support_objective = serializer.save(course=course)
+            return Response(SupportObjectiveSerializer(support_objective).data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

@@ -71,6 +71,7 @@ class Question(models.Model):
         limit_choices_to={"is_knowledge_point": True},
         related_name="questions",
     )
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='questions')
     # 对应支撑目标（多对多关系，一个题目可以支撑多个目标）
     support_objectives = models.ManyToManyField(
         SupportObjective, related_name="questions"
