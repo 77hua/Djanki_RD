@@ -1,3 +1,4 @@
+from datetime import timedelta, timezone
 from django.db import models
 from quizbank.models import Course, Question
 from login.models import User
@@ -10,7 +11,9 @@ class LearningRecord(models.Model):
     question = models.ForeignKey(Question, on_delete=models.CASCADE, verbose_name="题目")
     ef = models.FloatField(default=2.5, verbose_name="易度系数(EF)")
     interval = models.IntegerField(default=1, verbose_name="复习间隔（天数）")
-    next_review_date = models.DateField(verbose_name="下一次复习日期")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="记录创建时间")
+    next_review_date = models.DateTimeField(verbose_name="下一次复习日期")
+    last_review_date = models.DateTimeField(verbose_name="最后一次复习日期")
     repetition = models.IntegerField(default=0, verbose_name="复习次数")
     last_quality = models.IntegerField(default=0, verbose_name="最后一次质量评分")
     last_review_date = models.DateField(verbose_name="最后一次复习日期")
@@ -39,12 +42,36 @@ class LearningRecord(models.Model):
         self.update_status()
         super().save(*args, **kwargs)
 
+    # 更新状态
     def update_status(self):
         """根据EF和复习间隔等参数自动更新状态。"""
         if self.last_quality >= 4 and self.interval > 30:
             self.status = 'mastered'
         else:
             self.status = 'reviewing'
+
+    # SM-2算法核心
+    def update_learning_parameters(self, quality_score):
+        if quality_score < 0 or quality_score > 5:
+            raise ValueError("响应质量必须在0到5之间")
+
+        # 更新ef值
+        self.ef = max(1.3, self.ef + (0.1 - (5 - quality_score) * (0.08 + (5 - quality_score) * 0.02)))
+
+        # 计算重复间隔
+        if self.repetition == 0:
+            self.interval = 1
+        elif self.repetition == 1:
+            self.interval = 6
+        else:
+            self.interval *= self.ef
+
+        self.repetition += 1
+        self.last_quality = quality_score
+        self.next_review_date = timezone.now().date() + timedelta(days=self.interval)
+        self.update_status()
+
+        self.save()        
 
 # 学习情况
 class CourseLearningStatus(models.Model):

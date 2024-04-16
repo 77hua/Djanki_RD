@@ -255,6 +255,7 @@ class CourseSupportObjectivesView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
+        tags=['支撑目标'],
         summary="获取课程的所有支撑目标",
         responses={200: SupportObjectiveSerializer(many=True)},
         description="根据课程ID返回该课程的所有支撑目标列表。"
@@ -270,6 +271,7 @@ class CourseSupportObjectivesView(APIView):
         return Response(serializer.data)
 
     @extend_schema(
+        tags=['支撑目标'],
         summary="为特定课程添加新的支撑目标",
         request=SupportObjectiveSerializer,
         responses={201: SupportObjectiveSerializer},
