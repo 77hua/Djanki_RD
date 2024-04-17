@@ -1,10 +1,11 @@
 from rest_framework.views import APIView
+from django.utils import timezone
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers,status
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from quizbank.models import Course, Question  # 引入quizbank应用的模型
-from .models import LearningRecord,CourseLearningStatus
+from .models import LearningRecord
 from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 from .serializers import LearningRecordSerializer
 from quizbank.serializers import QuestionSerializer
@@ -38,27 +39,26 @@ class CourseQuestionStatsView(APIView):
     def get(self, request, course_id):
         # 确保课程存在
         course = get_object_or_404(Course, pk=course_id)
-        # 尝试获取用户在此课程中的学习状态
-        try:
-            learning_status = CourseLearningStatus.objects.get(course=course, user=request.user)
-            stats = {
-                'not_learned': learning_status.learning,
-                'reviewing': learning_status.reviewing,
-                'mastered': learning_status.mastered
-            }
-            
-        except CourseLearningStatus.DoesNotExist:
-            # 如果还没有记录，表示用户还没有开始学习这个课程的任何内容
-            stats = {
-                'not_learned': Question.objects.filter(course=course).count(),
-                'reviewing': 0,
-                'mastered': 0
-            }
+
+        # 获取课程下所有试题数量
+        total_questions_count = Question.objects.filter(course=course).count()
+
+        # 获取用户在此课程中的学习记录，包括reviewing和mastered状态
+        learning_records = LearningRecord.objects.filter(user=request.user, question__course=course)
+        reviewing_count = learning_records.filter(status='reviewing').count()
+        mastered_count = learning_records.filter(status='mastered').count()
+
+        # 未学习的试题数量
+        not_learned_count = total_questions_count - (reviewing_count + mastered_count)
 
         return Response({
             'course_id': course_id,
             'course_name': course.name,
-            'learning_status': stats
+            'learning_status': {
+                'not_learned': not_learned_count,
+                'reviewing': reviewing_count,
+                'mastered': mastered_count
+            }
         })
 
 # 获取未学习的试题
@@ -83,54 +83,77 @@ class StartLearningView(APIView):
         if new_questions.exists():
             return Response(QuestionSerializer(new_questions, many=True).data)
         else:
-            return Response({"message": "暂无要学习试题！"}, status=404)
+            return Response({"message": "暂无要学习试题！"}, status=200)
 
 
 # 获取已学习的试题 
 class StartReviewView(APIView):
     permission_classes = [IsAuthenticated]
-    
-    @extend_schema(
-        tags=['课程学习情况'],
-    )
+
     def get(self, request, course_id):
-        question_num = int(request.query_params.get('question_num', 5))  # 默认返回5题，如果没有指定则返回5题
+        today = timezone.now().date()
+        question_num = int(request.query_params.get('question_num', 5))  # 从查询参数中获取 question_num
         course = get_object_or_404(Course, id=course_id)
 
-        review_questions = LearningRecord.objects.filter(
+        # 查询用户在指定课程中已学习且计划复习日期小于或等于今天的试题
+        review_records = LearningRecord.objects.filter(
             user=request.user,
-            question__course=course
+            question__course=course,
+            next_review_date__lte=today  # 只选择需要复习的（即复习日期小于或等于今天的）
         ).values_list('question_id', flat=True)
 
-        # 获取需要复习的试题，并限制返回的数量
-        questions_to_review = Question.objects.filter(id__in=review_questions)[:question_num]
+        # 根据上述查询的试题ID，获取相应的试题对象
+        questions_to_review = Question.objects.filter(id__in=review_records)[:question_num]
 
         if questions_to_review.exists():
             return Response(QuestionSerializer(questions_to_review, many=True).data)
         else:
-            return Response({"message": "今天暂时没有要复习的试题！"}, status=404)
+            return Response({"message": "今天暂时无需要复习的试题！."}, status=200)
 
-# 更新已学习试题的记录（算法核心）
-class UpdateLearningRecordView(APIView):
+# 更新学习记录
+class BulkUpdateOrCreateLearningRecordsView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, record_id):
-        # 获取学习记录
-        learning_record = get_object_or_404(LearningRecord, pk=record_id, user=request.user)
+    def post(self, request):
+        updates = request.data.get('updates', [])
+        response_data = []
+        errors = []
+        for update in updates:
+            question_id = update.get('question_id')
+            quality_score = update.get('quality_score')
+            try:
+                question = Question.objects.get(pk=question_id)
+                quality_score = int(quality_score)
+                course = question.course  # 确保从问题中获取课程信息
+                if not (0 <= quality_score <= 5):
+                    raise ValueError("质量评分必须在0到5之间")
 
-        # 获取评分
-        quality_score = request.data.get('quality_score')
-        if quality_score is None:
-            return Response({"error": "质量评分是必须的。"}, status=status.HTTP_400_BAD_REQUEST)
+                learning_record, created = LearningRecord.objects.get_or_create(
+                    user=request.user,
+                    question=question,
+                    course=course,
+                    defaults={
+                        'next_review_date': timezone.now().date(),
+                        'last_review_date': timezone.now().date(),
+                        'ef': 2.5,
+                        'interval': 1,
+                        'status': 'learning'
+                    }
+                )
+                # 更新学习参数
+                learning_record.update_learning_parameters(quality_score)
+                
+                response_data.append({
+                    'question_id': question_id,
+                    'message': 'Updated successfully',
+                    'created': created
+                })
+            except Exception as e:
+                errors.append({
+                    'question_id': question_id,
+                    'error': str(e)
+                })
 
-        try:
-            quality_score = int(quality_score)
-        except ValueError:
-            return Response({"error": "质量评分必须是整数。"}, status=status.HTTP_400_BAD_REQUEST)
-
-        # 更新学习参数
-        try:
-            learning_record.update_learning_parameters(quality_score)
-            return Response({"message": "学习记录已更新。"}, status=status.HTTP_200_OK)
-        except ValueError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        if errors:
+            return Response({'errors': errors}, status=400)
+        return Response(response_data, status=200)
