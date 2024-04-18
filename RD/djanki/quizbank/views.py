@@ -6,6 +6,8 @@ from .serializers import CourseSerializer,CategorySerializer,QuestionSerializer,
 from .models import Course,Category,Question,SupportObjective 
 from drf_spectacular.utils import extend_schema,inline_serializer,OpenApiResponse
 from django.db.models import F,Max
+from django.db import transaction
+from django.shortcuts import get_object_or_404
 
 # 课程列表、添加
 class CourseView(APIView):
@@ -199,6 +201,57 @@ class CourseCategoryDetailView(APIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+# 拖拽知识点
+class UpdateCategoryTreeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        with transaction.atomic():  # 使用事务确保整个操作的原子性
+            # 验证传入的ID对应的实体是否存在
+            dragged_node = get_object_or_404(Category, id=request.data.get('draggedId'), course_id=course_id)
+            drop_node = get_object_or_404(Category, id=request.data.get('dropId'), course_id=course_id)
+            course = get_object_or_404(Course, id=course_id)
+
+            drop_type = request.data.get('type')
+
+            # 确定新的parent和order
+            if drop_type == 'inner':
+                new_parent = drop_node
+                new_order = Category.objects.filter(parent=new_parent,course=course).count() + 1  # 最后的位置
+            else:
+                new_parent = drop_node.parent
+                if drop_type == 'before':
+                    new_order = drop_node.order
+                elif drop_type == 'after':
+                    new_order = drop_node.order + 1
+
+            # 更新被拖拽节点及其子节点的order
+            if dragged_node.parent == new_parent:
+                # 同一个父节点
+                Category.objects.filter(parent=new_parent, course=course, order__gte=new_order).exclude(id=dragged_node.id).update(order=F('order') + 1)
+            else:
+                # 不同的父节点
+                Category.objects.filter(parent=dragged_node.parent, course=course, order__gt=dragged_node.order).update(order=F('order') - 1)
+                Category.objects.filter(parent=new_parent, course=course, order__gte=new_order).update(order=F('order') + 1)
+
+            # 更新拖拽节点
+            dragged_node.parent = new_parent
+            dragged_node.order = new_order
+            dragged_node.save()
+
+            # 重新排序所有影响的节点以保证order的连续性
+            self.reorder_siblings(new_parent, course)
+            if dragged_node.parent != new_parent:
+                self.reorder_siblings(dragged_node.parent, course)
+
+        return Response({"message": "Node reordered successfully"})
+
+    def reorder_siblings(self, parent, course):
+        siblings = Category.objects.filter(parent=parent, course=course).order_by('order')
+        for index, sibling in enumerate(siblings):
+            sibling.order = index + 1  # 重新分配order，从1开始
+            sibling.save()
+        
 # 试题创建
 class QuestionCreateView(APIView):
     permission_classes = [IsAuthenticated]
