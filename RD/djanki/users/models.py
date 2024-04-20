@@ -74,5 +74,6 @@ class LearningRecord(models.Model):
 
         self.last_quality = quality_score
         self.next_review_date = timezone.now().date() + timedelta(days=self.interval)
+        self.last_review_date = timezone.now().date()
         self.update_status()
         self.save()

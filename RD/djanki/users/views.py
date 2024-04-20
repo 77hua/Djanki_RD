@@ -100,15 +100,15 @@ class StartReviewView(APIView):
             user=request.user,
             question__course=course,
             next_review_date__lte=today  # 只选择需要复习的（即复习日期小于或等于今天的）
-        ).values_list('question_id', flat=True)
+        ).select_related('question').order_by('next_review_date')[:question_num]
 
-        # 根据上述查询的试题ID，获取相应的试题对象
-        questions_to_review = Question.objects.filter(id__in=review_records)[:question_num]
+        # 获取这些记录对应的试题
+        questions_to_review = [record.question for record in review_records]
 
-        if questions_to_review.exists():
+        if questions_to_review:
             return Response(QuestionSerializer(questions_to_review, many=True).data)
         else:
-            return Response({"message": "今天暂时无需要复习的试题！."}, status=200)
+            return Response({"message": "今天暂时无需要复习的试题！"}, status=200)
 
 # 更新学习记录
 class BulkUpdateOrCreateLearningRecordsView(APIView):

@@ -360,6 +360,24 @@ class CourseSupportObjectivesView(APIView):
             return Response(SupportObjectiveSerializer(support_objective).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @extend_schema(
+        tags=['支撑目标'],
+        summary="删除特定课程的支撑目标",
+        responses={
+            204: OpenApiResponse(description="支撑目标删除成功"),
+            404: OpenApiResponse(description="支撑目标未找到或课程未找到")
+        },
+        description="根据课程ID和支撑目标ID删除指定的支撑目标。"
+    )
+    def delete(self, request, course_id, objective_id):
+        # 首先确保课程存在
+        course = get_object_or_404(Course, pk=course_id)
+        # 尝试获取并删除指定的支撑目标
+        support_objective = get_object_or_404(SupportObjective, pk=objective_id, course=course)
+        support_objective.delete()
+        return Response({'message': '支撑目标删除成功'}, status=status.HTTP_204_NO_CONTENT)
+
+    
 # 具体试题
 class QuestionDetailView(APIView):
     permission_classes = [IsAuthenticated]
