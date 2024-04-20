@@ -3,11 +3,14 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import status,serializers
 from .serializers import CourseSerializer,CategorySerializer,QuestionSerializer,SupportObjectiveSerializer
-from .models import Course,Category,Question,SupportObjective 
+from .models import Course,Category,Question,SupportObjective,QuestionImage
 from drf_spectacular.utils import extend_schema,inline_serializer,OpenApiResponse
 from django.db.models import F,Max
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.core.files.storage import FileSystemStorage
+from django.http import JsonResponse
+from .func import remove_markdown_images
 
 # 课程列表、添加
 class CourseView(APIView):
@@ -302,6 +305,16 @@ class QuestionCreateView(APIView):
             serializer.save(course=course)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# 上传图片    
+class UploadImageView(APIView):
+
+    def post(self, request):
+        image_file = request.FILES['image']
+        fs = FileSystemStorage()
+        filename = fs.save(image_file.name, image_file)
+        uploaded_file_url = fs.url(filename)
+        return JsonResponse({'message': '图片上传成功', 'url': uploaded_file_url})    
     
 # 课程支撑
 class CourseSupportObjectivesView(APIView):
@@ -346,3 +359,31 @@ class CourseSupportObjectivesView(APIView):
             support_objective = serializer.save(course=course)
             return Response(SupportObjectiveSerializer(support_objective).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+# 具体试题
+class QuestionDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, question_id):
+        try:
+            question = Question.objects.get(pk=question_id)
+            serializer = QuestionSerializer(question)
+            return Response(serializer.data)
+        except Question.DoesNotExist:
+            return Response({'error': '没找到该课程'}, status=status.HTTP_404_NOT_FOUND)
+
+# 删除试题
+class QuestionDeleteView(APIView):
+    permission_classes = [IsAuthenticated]
+    def delete(self, request, question_id):
+        try:
+            question = Question.objects.get(pk=question_id)
+            # 删除content_markdown, answer_markdown, explanation_markdown中的图片
+            remove_markdown_images(question.content_markdown)
+            remove_markdown_images(question.answer_markdown)
+            remove_markdown_images(question.explanation_markdown)
+            
+            # 删除问题本身
+            question.delete()
+            return Response({'message': '删除成功'}, status=status.HTTP_204_NO_CONTENT)
+        except Question.DoesNotExist:
+            return Response({'error': '没找到该试题'}, status=status.HTTP_404_NOT_FOUND)

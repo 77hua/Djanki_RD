@@ -89,3 +89,11 @@ class Question(models.Model):
 
     def __str__(self):
         return f"{self.question_type}: {self.summary[:50]}"
+
+# 问题中的图片
+class QuestionImage(models.Model):
+    question = models.ForeignKey(Question, related_name='images', on_delete=models.CASCADE)
+    image_url = models.URLField(max_length=1024)
+
+    def __str__(self):
+        return f"Image for {self.question.id}"

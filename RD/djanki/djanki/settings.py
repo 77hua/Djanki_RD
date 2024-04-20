@@ -10,12 +10,16 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
+# 媒体文件的基础路径
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# 媒体文件服务的URL，用于访问媒体文件
+MEDIA_URL = '/media/'
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
@@ -86,7 +90,7 @@ DATABASES = {
         'NAME': 'study_sys',  # 你的数据库名字
         'USER': 'postgres',  # 你的PostgreSQL用户名
         'PASSWORD': 'Qq123123',  # 你的PostgreSQL密码
-        'HOST': '10.115.63.216',  # 你的数据库主机，本地通常是localhost
+        'HOST': '10.115.59.233',  # 你的数据库主机，本地通常是localhost
         'PORT': '5432',  # 你的PostgreSQL端口，5432是默认端口
     }
 }
