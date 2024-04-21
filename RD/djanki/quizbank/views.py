@@ -378,7 +378,7 @@ class CourseSupportObjectivesView(APIView):
         return Response({'message': '支撑目标删除成功'}, status=status.HTTP_204_NO_CONTENT)
 
     
-# 具体试题
+# 具体试题、修改试题
 class QuestionDetailView(APIView):
     permission_classes = [IsAuthenticated]
     def get(self, request, question_id):
@@ -388,6 +388,16 @@ class QuestionDetailView(APIView):
             return Response(serializer.data)
         except Question.DoesNotExist:
             return Response({'error': '没找到该课程'}, status=status.HTTP_404_NOT_FOUND)
+    # 修改试题
+    def put(self, request, question_id):
+        question = get_object_or_404(Question, pk=question_id)
+
+        serializer = QuestionSerializer(question, data=request.data)
+        if serializer.is_valid():
+            serializer.save()  # 保存修改后的试题
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 # 删除试题
 class QuestionDeleteView(APIView):
@@ -405,3 +415,4 @@ class QuestionDeleteView(APIView):
             return Response({'message': '删除成功'}, status=status.HTTP_204_NO_CONTENT)
         except Question.DoesNotExist:
             return Response({'error': '没找到该试题'}, status=status.HTTP_404_NOT_FOUND)
+        

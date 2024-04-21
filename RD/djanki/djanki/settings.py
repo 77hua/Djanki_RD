@@ -90,7 +90,7 @@ DATABASES = {
         'NAME': 'study_sys',  # 你的数据库名字
         'USER': 'postgres',  # 你的PostgreSQL用户名
         'PASSWORD': 'Qq123123',  # 你的PostgreSQL密码
-        'HOST': '10.115.59.233',  # 你的数据库主机，本地通常是localhost
+        'HOST': '10.196.175.142',  # 你的数据库主机，本地通常是localhost
         'PORT': '5432',  # 你的PostgreSQL端口，5432是默认端口
     }
 }

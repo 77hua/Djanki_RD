@@ -9,7 +9,7 @@ urlpatterns = [
     path('courses/<int:course_id>/questions/', QuestionCreateView.as_view(), name='create-category'), # 试题创建、获取
     path('question/<int:course_id>/support-objectives/',CourseSupportObjectivesView.as_view(),name='course-support-objectives'), # 课程支撑
     path('question/<int:course_id>/support-objectives/<int:objective_id>/', CourseSupportObjectivesView.as_view(), name='support-objective-delete'), # 支撑目标删除
-    path('question/<int:question_id>/detail',QuestionDetailView.as_view(),name='question-detail'), # 试题详细
-    path('question/<int:question_id>/delete',QuestionDeleteView.as_view(),name='question-detail'), # 试题详细
+    path('question/<int:question_id>/detail',QuestionDetailView.as_view(),name='question-detail'), # 试题详细、修改试题
+    path('question/<int:question_id>/delete',QuestionDeleteView.as_view(),name='question-detail'), # 删除试题
     path('upload_image/', UploadImageView.as_view(), name='upload_image'), # 上传图片
 ]
