@@ -416,3 +416,29 @@ class QuestionDeleteView(APIView):
         except Question.DoesNotExist:
             return Response({'error': '没找到该试题'}, status=status.HTTP_404_NOT_FOUND)
         
+# 根据内容搜索试题
+class SearchQuestionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        search_term = request.query_params.get('query')
+        if not search_term:
+            return Response(
+                {'error': '请提供搜索内容'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # 搜索试题内容、题型等字段
+        matching_questions = Question.objects.filter(
+            content_markdown__icontains=search_term  # 搜索content_markdown中包含的词语
+        )
+
+        # 返回找到的试题
+        if matching_questions.exists():
+            serializer = QuestionSerializer(matching_questions, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response(
+                {'message': '没有找到相关试题'},
+                status=status.HTTP_404_NOT_FOUND
+            )       

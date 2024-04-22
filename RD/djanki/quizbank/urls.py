@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import CourseView,CourseDetailView,CourseCategoryView,CourseCategoryDetailView,QuestionCreateView,CourseSupportObjectivesView,UpdateCategoryTreeView,UploadImageView,QuestionDetailView,QuestionDeleteView
+from .views import CourseView,CourseDetailView,CourseCategoryView,CourseCategoryDetailView,QuestionCreateView,CourseSupportObjectivesView,UpdateCategoryTreeView,UploadImageView,QuestionDetailView,QuestionDeleteView,SearchQuestionsView
 urlpatterns = [
     path('courses/', CourseView.as_view(), name='course-list-create'),# 获取、添加课程学习
     path('courses/<int:pk>/', CourseDetailView.as_view(), name='course-delete'),  # 删除、修改课程信息
@@ -10,6 +10,8 @@ urlpatterns = [
     path('question/<int:course_id>/support-objectives/',CourseSupportObjectivesView.as_view(),name='course-support-objectives'), # 课程支撑
     path('question/<int:course_id>/support-objectives/<int:objective_id>/', CourseSupportObjectivesView.as_view(), name='support-objective-delete'), # 支撑目标删除
     path('question/<int:question_id>/detail',QuestionDetailView.as_view(),name='question-detail'), # 试题详细、修改试题
-    path('question/<int:question_id>/delete',QuestionDeleteView.as_view(),name='question-detail'), # 删除试题
+    path('question/<int:question_id>/delete',QuestionDeleteView.as_view(),name='question-delete'), # 删除试题
     path('upload_image/', UploadImageView.as_view(), name='upload_image'), # 上传图片
+    path('question/search-by-content/', SearchQuestionsView.as_view(), name='search-question'), # 根据内容搜索试题
+
 ]
