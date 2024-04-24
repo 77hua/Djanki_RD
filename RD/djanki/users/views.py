@@ -1,3 +1,4 @@
+from datetime import datetime
 from rest_framework.views import APIView
 from django.utils import timezone
 from django.shortcuts import get_object_or_404
@@ -9,6 +10,7 @@ from .models import LearningRecord
 from drf_spectacular.utils import extend_schema, OpenApiResponse, inline_serializer
 from .serializers import LearningRecordSerializer
 from quizbank.serializers import QuestionSerializer
+from django.db.models import Sum, Min,Max
 
 # 获取某用户的某课程学习情况
 class CourseQuestionStatsView(APIView):
@@ -157,3 +159,63 @@ class BulkUpdateOrCreateLearningRecordsView(APIView):
         if errors:
             return Response({'errors': errors}, status=400)
         return Response(response_data, status=200)
+    
+# 学习统计
+class LearningStatisticsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user  # 获取当前用户
+        today = datetime.now().date()
+
+        # 获取所有与该用户相关的学习记录
+        learning_records = LearningRecord.objects.filter(user=user)
+
+        if not learning_records.exists():
+            return Response(
+                {"message": "没有找到与该用户相关的学习记录。"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 计算复习总次数
+        total_repetitions = learning_records.aggregate(Sum('repetition'))['repetition__sum']
+
+        # 计算已掌握的试题总数
+        mastered_count = learning_records.filter(status='mastered').count()
+
+        # 计算已学习的试题总数
+        learned_count = learning_records.count()
+
+        # 获取最早的学习记录创建时间
+        start_time = learning_records.aggregate(Min('created_at'))['created_at__min']
+
+        # 计算已学习天数
+        if start_time:
+            learning_days = (today - start_time).days  # 直接计算天数
+        else:
+            learning_days = 0
+
+        # 获取单个repetition最多的试题
+        max_repetition_record = learning_records.order_by('-repetition').first()
+        max_repetition_question = None
+        if max_repetition_record:
+            question_id = max_repetition_record.question_id
+            max_repetition_question = QuestionSerializer(Question.objects.get(id=question_id)).data
+
+        # 获取最近一次学习时间
+        last_review_date = learning_records.aggregate(Max('last_review_date'))['last_review_date__max']
+
+        # 获取最远一次复习时间
+        farthest_review_date = learning_records.aggregate(Max('next_review_date'))['next_review_date__max']
+
+        response_data = {
+            "total_repetitions": total_repetitions,
+            "mastered_count": mastered_count,
+            "learned_count": learned_count,
+            "learning_days": learning_days,
+            "max_repetition_question": max_repetition_question,
+            "last_review_date": last_review_date,
+            "farthest_review_date": farthest_review_date,
+        }
+
+        return Response(response_data, status=status.HTTP_200_OK)
